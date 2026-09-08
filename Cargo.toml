@@ -1,0 +1,10 @@
+[package]
+name = "lxwm"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bitflags = "2.13"
+wayland-backend = "0.3"
+wayland-client = "0.31"
+wayland-scanner = "0.31"
