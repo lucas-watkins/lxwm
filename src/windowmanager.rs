@@ -1,3 +1,8 @@
+use crate::river::river_window_manager_v1::Event;
+use crate::river::{
+    Edges, ObjectId, RiverNodeV1, RiverOutputV1, RiverSeatV1, RiverWindowManagerV1, RiverWindowV1,
+    RiverXkbBindingV1,
+};
 use crate::{Output, Seat, river};
 use std::collections::{HashMap, VecDeque};
 use wayland_client::protocol::wl_registry::WlRegistry;
@@ -23,7 +28,7 @@ pub struct WindowManager {
 // Represents a window in the window manager.
 pub struct Window {
     pub proxy: river::RiverWindowV1,
-    pub node: river::RiverNodeV1,
+    pub node: RiverNodeV1,
     pub new: bool,
     pub closed: bool,
     pub x: i32,
@@ -33,6 +38,26 @@ pub struct Window {
     pub pointer_move_requested: Option<river::RiverSeatV1>,
     pub pointer_resize_requested: Option<river::RiverSeatV1>,
     pub pointer_resize_requested_edges: river::Edges,
+}
+
+impl Window {
+    pub fn new(proxy: RiverWindowV1, qhandle: &QueueHandle<WindowManager>) -> Self {
+        let node = proxy.get_node(qhandle, ());
+
+        Self {
+            proxy,
+            node,
+            new: true,
+            closed: false,
+            x: 0,
+            y: 0,
+            width: 0,
+            height: 0,
+            pointer_move_requested: None,
+            pointer_resize_requested: None,
+            pointer_resize_requested_edges: Edges::None,
+        }
+    }
 }
 
 // This implementation helps the WindowManager singleton declared in main to
@@ -143,25 +168,133 @@ impl Dispatch<river::RiverWindowV1, ()> for WindowManager {
                 window.pointer_resize_requested_edges = edges.into_result().expect("Invalid Edges");
             }
 
-            Event::ShowWindowMenuRequested { x, y } => {},
+            Event::ShowWindowMenuRequested { x, y } => {}
 
-            Event::MaximizeRequested => {},
+            Event::MaximizeRequested => {}
 
-            Event::MinimizeRequested => {},
+            Event::MinimizeRequested => {}
 
-            Event::UnmaximizeRequested => {},
+            Event::UnmaximizeRequested => {}
 
-            Event::FullscreenRequested { output } => {},
+            Event::FullscreenRequested { output } => {}
 
-            Event::ExitFullscreenRequested => {},
+            Event::ExitFullscreenRequested => {}
 
-            Event::UnreliablePid { unreliable_pid } => {},
+            Event::UnreliablePid { unreliable_pid } => {}
 
-            Event::PresentationHint { hint } => {},
+            Event::PresentationHint { hint } => {}
 
-            Event::Identifier { identifier } => {},
+            Event::Identifier { identifier } => {}
 
             Event::Parent { parent } => {}
+        }
+    }
+}
+
+impl Dispatch<RiverWindowManagerV1, ()> for WindowManager {
+    fn event(
+        state: &mut Self,
+        proxy: &RiverWindowManagerV1,
+        event: <RiverWindowManagerV1 as Proxy>::Event,
+        data: &(),
+        conn: &Connection,
+        qhandle: &QueueHandle<Self>,
+    ) {
+        use crate::river::river_window_manager_v1::Event;
+
+        match event {
+            Event::Unavailable => {
+                eprintln!("Another window manager is running!");
+                std::process::exit(1);
+            }
+
+            Event::Finished => {
+                std::process::exit(0);
+            }
+
+            Event::ManageStart => {
+                let river_xkb = state
+                    .river_xkb_global
+                    .as_ref()
+                    .expect("river_xkb_bindings_v1 missing");
+
+                state.handle_manage_start(proxy, river_xkb, qhandle);
+            }
+
+            Event::RenderStart => state.handle_render_start(proxy),
+
+            Event::SessionLocked => {}
+
+            Event::SessionUnlocked => {}
+
+            Event::Window { id } => state.windows.push_back(Window::new(id, qhandle)),
+
+            Event::Output { id } => {
+                state.outputs.insert(id.id(), Output::new(id));
+            }
+
+            Event::Seat { id } => {
+                state.seats.insert(id.id(), Seat::new(id));
+            }
+        }
+
+        wayland_client::event_created_child!(WindowManager, RiverWindowManagerV1, [
+            river::river_window_manager_v1::EVT_WINDOW_OPCODE => (RiverWindowV1, ()),
+            river::river_window_manager_v1::EVT_OUTPUT_OPCODE => (RiverOutputV1, ()),
+            river::river_window_manager_v1::EVT_SEAT_OPCODE => (RiverSeatV1, ()),
+        ]);
+    }
+}
+
+impl Dispatch<RiverSeatV1, ()> for WindowManager {
+    fn event(
+        state: &mut Self,
+        proxy: &RiverSeatV1,
+        event: <RiverSeatV1 as Proxy>::Event,
+        data: &(),
+        conn: &Connection,
+        qhandle: &QueueHandle<Self>,
+    ) {
+        use river::river_seat_v1::Event;
+
+        let seat = state.seats.get_mut(&proxy.id()).expect("Seat not found!");
+
+        match event {
+            Event::Removed => seat.removed = true,
+            Event::WlSeat { name: _ } => {}
+            Event::PointerEnter { window } => seat.hovered = Some(window),
+            Event::PointerLeave => seat.hovered = None,
+            Event::WindowInteraction { window } => seat.interacted = Some(window),
+            Event::ShellSurfaceInteraction { shell_surface } => {}
+            Event::OpDelta { dx, dy } => (seat.op_dx, seat.op_dy) = (dx, dy),
+            Event::OpRelease => seat.op_release = true,
+            Event::PointerPosition { x: _, y: _ } => {}
+        }
+    }
+}
+
+impl Dispatch<RiverXkbBindingV1, ObjectId> for WindowManager {
+    fn event(
+        state: &mut Self,
+        proxy: &RiverXkbBindingV1,
+        event: <RiverXkbBindingV1 as Proxy>::Event,
+        data: &ObjectId,
+        conn: &Connection,
+        qhandle: &QueueHandle<Self>,
+    ) {
+        use river::river_xkb_binding_v1::Event;
+
+        let seat = state.seats.get_mut(data).expect("Seat not found");
+
+        let binding = seat
+            .xkb_bindings
+            .get(&proxy.id())
+            .expect("xkb_binding not found");
+
+        match event {
+            Event::Pressed => seat.pending_action = binding.action,
+            Event::Released => {},
+            Event::StopRepeat => {},
         }
     }
 }

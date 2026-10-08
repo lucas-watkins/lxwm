@@ -1,4 +1,4 @@
-use crate::river;
+use crate::river::{RiverOutputV1, RiverXkbBindingV1, RiverPointerBindingV1};
 
 pub enum Action {
     None,
@@ -11,16 +11,25 @@ pub enum Action {
 }
 
 pub struct XkbBinding {
-    pub proxy: river::RiverXkbBindingV1,
+    pub proxy: RiverXkbBindingV1,
     pub action: Action,
 }
 
 pub struct PointerBinding {
-    pub proxy: river::RiverPointerBindingV1,
+    pub proxy: RiverPointerBindingV1,
     pub action: Action,
 }
 
 pub struct Output {
-    pub proxy: river::RiverOutputV1,
+    pub proxy: RiverOutputV1,
     pub removed: bool,
+}
+
+impl Output {
+    pub fn new(proxy: RiverOutputV1) -> Self {
+        Self {
+            proxy,
+            removed: false,
+        }
+    }
 }
