@@ -1,5 +1,6 @@
 use crate::river::{RiverOutputV1, RiverXkbBindingV1, RiverPointerBindingV1};
 
+#[derive(Debug, Clone, Copy)]
 pub enum Action {
     None,
     SpawnFoot,

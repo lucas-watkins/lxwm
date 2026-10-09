@@ -17,10 +17,6 @@ pub use interfaces::rxkb::*;
 pub use wayland_client::protocol::*;
 pub use wayland_client::{Connection, backend::ObjectId};
 
-// Ignore some of the requests River sends for now
-wayland_client::delegate_noop!(crate::WindowManager: ignore RiverXkbBindingsV1);
-wayland_client::delegate_noop!(crate::WindowManager: ignore RiverNodeV1);
-
 // River protocol interfaces
 mod interfaces {
     pub(super) mod rwm {
