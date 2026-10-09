@@ -1,17 +1,24 @@
-use crate::river::{Edges, Modifiers, RiverSeatV1, RiverWindowManagerV1, RiverXkbBindingsV1};
+use crate::river::{
+    river_seat_v1::{Modifiers, RiverSeatV1},
+    river_window_manager_v1::RiverWindowManagerV1,
+    river_window_v1::{Edges, RiverWindowV1},
+    river_xkb_bindings_v1::RiverXkbBindingsV1,
+};
 use crate::{Action, PointerBinding, Window, WindowManager, XkbBinding, river};
 use std::collections::{HashMap, VecDeque};
 use wayland_client::{Proxy, QueueHandle};
+use wayland_backend::client::ObjectId;
 
+#[derive(Debug)]
 pub struct Seat {
-    pub proxy: river::RiverSeatV1,
+    pub proxy: RiverSeatV1,
     pub new: bool,
     pub removed: bool,
-    pub focused: Option<river::RiverWindowV1>,
-    pub hovered: Option<river::RiverWindowV1>,
-    pub interacted: Option<river::RiverWindowV1>,
-    pub xkb_bindings: HashMap<river::ObjectId, XkbBinding>,
-    pub pointer_bindings: HashMap<river::ObjectId, PointerBinding>,
+    pub focused: Option<RiverWindowV1>,
+    pub hovered: Option<RiverWindowV1>,
+    pub interacted: Option<RiverWindowV1>,
+    pub xkb_bindings: HashMap<ObjectId, XkbBinding>,
+    pub pointer_bindings: HashMap<ObjectId, PointerBinding>,
     pub pending_action: Action,
     pub op: SeatOp,
     pub op_dx: i32,
@@ -19,20 +26,21 @@ pub struct Seat {
     pub op_release: bool,
 }
 
+#[derive(Debug, Clone)]
 pub enum SeatOp {
     None,
     Move {
-        window_proxy: river::RiverWindowV1,
+        window_proxy: RiverWindowV1,
         start_x: i32,
         start_y: i32,
     },
     Resize {
-        window_proxy: river::RiverWindowV1,
+        window_proxy: RiverWindowV1,
         start_x: i32,
         start_y: i32,
         start_width: i32,
         start_height: i32,
-        edges: river::Edges,
+        edges: Edges,
     },
 }
 

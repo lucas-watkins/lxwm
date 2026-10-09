@@ -2,20 +2,10 @@
 // wayland_scanner.
 
 // Re-exports
-pub use self::{
-    river_node_v1::RiverNodeV1,
-    river_output_v1::RiverOutputV1,
-    river_pointer_binding_v1::RiverPointerBindingV1,
-    river_seat_v1::{Modifiers, RiverSeatV1},
-    river_window_manager_v1::RiverWindowManagerV1,
-    river_window_v1::{Edges, RiverWindowV1},
-    river_xkb_binding_v1::RiverXkbBindingV1,
-    river_xkb_bindings_v1::RiverXkbBindingsV1,
-};
 pub use interfaces::rwm::*;
 pub use interfaces::rxkb::*;
+pub extern crate wayland_client;
 pub use wayland_client::protocol::*;
-pub use wayland_client::{Connection, backend::ObjectId};
 
 // River protocol interfaces
 mod interfaces {
@@ -31,6 +21,5 @@ mod interfaces {
 }
 
 // River protocol client code
-use wayland_client;
 wayland_scanner::generate_client_code!("protocol/river-window-management-v1.xml");
 wayland_scanner::generate_client_code!("protocol/river-xkb-bindings-v1.xml");

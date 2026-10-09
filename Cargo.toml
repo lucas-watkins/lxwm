@@ -3,6 +3,14 @@ name = "lxwm"
 version = "0.1.0"
 edition = "2024"
 
+[[bin]]
+name = "lxwm"
+path = "src/main.rs"
+
+[[bin]]
+name = "tinyrwm"
+path = "src/tinyrwm.rs"
+
 [dependencies]
 bitflags = "2.13"
 wayland-backend = "0.3"

@@ -1,9 +1,10 @@
 use lxwm::river;
 use std::error::Error;
+use wayland_client::Connection;
 
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let conn = river::Connection::connect_to_env()?;
+    let conn = Connection::connect_to_env()?;
     let display = conn.display();
 
     let mut event_queue = conn.new_event_queue();

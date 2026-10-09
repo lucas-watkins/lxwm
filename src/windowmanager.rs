@@ -1,14 +1,18 @@
-use crate::river::river_seat_v1::Modifiers;
-use crate::river::river_window_manager_v1::Event;
 use crate::river::{
-    Edges, ObjectId, RiverNodeV1, RiverOutputV1, RiverPointerBindingV1, RiverSeatV1,
-    RiverWindowManagerV1, RiverWindowV1, RiverXkbBindingV1, RiverXkbBindingsV1,
+    river_node_v1::RiverNodeV1,
+    river_output_v1::RiverOutputV1,
+    river_pointer_binding_v1::RiverPointerBindingV1,
+    river_seat_v1::{Modifiers, RiverSeatV1},
+    river_window_manager_v1::RiverWindowManagerV1,
+    river_window_v1::{Edges, RiverWindowV1},
+    river_xkb_binding_v1::RiverXkbBindingV1,
+    river_xkb_bindings_v1::RiverXkbBindingsV1,
 };
-use crate::{Action, Output, Seat, SeatOp, river};
-use bitflags::Flags;
+use crate::{Action, Output, Seat, SeatOp};
 use std::collections::{HashMap, VecDeque};
-use wayland_client::protocol::wl_registry::WlRegistry;
-use wayland_client::{Connection, Dispatch, Proxy, QueueHandle};
+use wayland_backend::client::ObjectId;
+use wayland_client::{protocol::wl_registry, Connection, Dispatch, Proxy, QueueHandle};
+
 
 // Version that we expect from River for the window manager protocol.
 const RIVER_WINDOW_MANAGER_V1_VERSION: u32 = 4;
@@ -18,14 +22,14 @@ const RIVER_XKB_BINDINGS_V1_VERSION: u32 = 1;
 
 // Represents the overall global state of the window manager. Only one of these
 // objects should be created.
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct WindowManager {
-    pub river_wm_global: Option<river::RiverWindowManagerV1>,
-    pub river_xkb_global: Option<river::RiverXkbBindingsV1>,
+    pub river_wm_global: Option<RiverWindowManagerV1>,
+    pub river_xkb_global: Option<RiverXkbBindingsV1>,
     pub wm_data: WMData,
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct WMData {
     pub windows: VecDeque<Window>,
     pub outputs: HashMap<ObjectId, Output>,
@@ -91,6 +95,8 @@ impl WMData {
                 }
             }
         }
+
+        proxy.render_finish();
     }
 
     fn remove_outputs(&mut self) {
@@ -145,6 +151,8 @@ impl WMData {
                 seat.pointer_bindings
                     .values_mut()
                     .for_each(|binding| binding.proxy.destroy());
+
+                seat.proxy.destroy();
 
                 return false;
             }
@@ -226,8 +234,9 @@ impl WMData {
 }
 
 // Represents a window in the window manager.
+#[derive(Debug)]
 pub struct Window {
-    pub proxy: river::RiverWindowV1,
+    pub proxy: RiverWindowV1,
     pub node: RiverNodeV1,
     pub new: bool,
     pub closed: bool,
@@ -235,9 +244,9 @@ pub struct Window {
     pub y: i32,
     pub width: i32,
     pub height: i32,
-    pub pointer_move_requested: Option<river::RiverSeatV1>,
-    pub pointer_resize_requested: Option<river::RiverSeatV1>,
-    pub pointer_resize_requested_edges: river::Edges,
+    pub pointer_move_requested: Option<RiverSeatV1>,
+    pub pointer_resize_requested: Option<RiverSeatV1>,
+    pub pointer_resize_requested_edges: Edges,
 }
 
 impl Window {
@@ -268,16 +277,16 @@ impl Window {
 
 // This implementation helps the WindowManager singleton declared in main to
 // bind to River globals.
-impl Dispatch<WlRegistry, ()> for WindowManager {
+impl Dispatch<wl_registry::WlRegistry, ()> for WindowManager {
     fn event(
         state: &mut Self,
-        proxy: &WlRegistry,
-        event: <WlRegistry as Proxy>::Event,
+        proxy: &wl_registry::WlRegistry,
+        event: <wl_registry::WlRegistry as Proxy>::Event,
         data: &(),
         conn: &Connection,
         qhandle: &QueueHandle<Self>,
     ) {
-        use river::wl_registry::Event;
+        use crate::river::wl_registry::Event;
 
         if let Event::Global {
             name,
@@ -316,26 +325,24 @@ impl Dispatch<WlRegistry, ()> for WindowManager {
                     state.river_xkb_global = Some(river_xkb_global);
                 }
 
-                // Catch all as error
-                ifname => {
-                    crate::exit!("Unrecognized name: {ifname}");
-                }
+                // Catch all others and do nothing
+                _ => {}
             }
         }
     }
 }
 
 // Handles RiverWindowV1 events for the WindowManager object
-impl Dispatch<river::RiverWindowV1, ()> for WindowManager {
+impl Dispatch<RiverWindowV1, ()> for WindowManager {
     fn event(
         state: &mut Self,
-        proxy: &river::RiverWindowV1,
-        event: <river::RiverWindowV1 as Proxy>::Event,
+        proxy: &RiverWindowV1,
+        event: <RiverWindowV1 as Proxy>::Event,
         data: &(),
         conn: &Connection,
         qhandle: &QueueHandle<Self>,
     ) {
-        use river::river_window_v1::Event;
+        use crate::river::river_window_v1::Event;
 
         // Find the window that has the same proxy passed to us in the event handler.
         // (Find the window we're talking about in this context)
@@ -443,13 +450,13 @@ impl Dispatch<RiverWindowManagerV1, ()> for WindowManager {
                 state.wm_data.seats.insert(id.id(), Seat::new(id));
             }
         }
-
-        wayland_client::event_created_child!(WindowManager, RiverWindowManagerV1, [
-            river::river_window_manager_v1::EVT_WINDOW_OPCODE => (RiverWindowV1, ()),
-            river::river_window_manager_v1::EVT_OUTPUT_OPCODE => (RiverOutputV1, ()),
-            river::river_window_manager_v1::EVT_SEAT_OPCODE => (RiverSeatV1, ()),
-        ]);
     }
+
+    wayland_client::event_created_child!(WindowManager, RiverWindowManagerV1, [
+            crate::river::river_window_manager_v1::EVT_WINDOW_OPCODE => (RiverWindowV1, ()),
+            crate::river::river_window_manager_v1::EVT_OUTPUT_OPCODE => (RiverOutputV1, ()),
+            crate::river::river_window_manager_v1::EVT_SEAT_OPCODE => (RiverSeatV1, ()),
+    ]);
 }
 
 impl Dispatch<RiverOutputV1, ()> for WindowManager {
@@ -461,7 +468,7 @@ impl Dispatch<RiverOutputV1, ()> for WindowManager {
         conn: &Connection,
         qhandle: &QueueHandle<Self>,
     ) {
-        use river::river_output_v1::Event;
+        use crate::river::river_output_v1::Event;
 
         let output = state
             .wm_data
@@ -493,7 +500,7 @@ impl Dispatch<RiverSeatV1, ()> for WindowManager {
         conn: &Connection,
         qhandle: &QueueHandle<Self>,
     ) {
-        use river::river_seat_v1::Event;
+        use crate::river::river_seat_v1::Event;
 
         let seat = state
             .wm_data
@@ -524,7 +531,7 @@ impl Dispatch<RiverXkbBindingV1, ObjectId> for WindowManager {
         conn: &Connection,
         qhandle: &QueueHandle<Self>,
     ) {
-        use river::river_xkb_binding_v1::Event;
+        use crate::river::river_xkb_binding_v1::Event;
 
         let seat = state.wm_data.seats.get_mut(data).expect("Seat not found!");
 
@@ -550,7 +557,7 @@ impl Dispatch<RiverPointerBindingV1, ObjectId> for WindowManager {
         conn: &Connection,
         qhandle: &QueueHandle<Self>,
     ) {
-        use river::river_pointer_binding_v1::Event;
+        use crate::river::river_pointer_binding_v1::Event;
 
         let seat = state.wm_data.seats.get_mut(data).expect("Seat not found!");
         let binding = seat
